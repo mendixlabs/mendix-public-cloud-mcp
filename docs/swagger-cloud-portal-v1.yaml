@@ -1,0 +1,874 @@
+openapi: 3.0.3
+info:
+  title: Mendix Deploy API
+  version: 1.0.0
+  description: |
+    The Mendix Deploy API allows you to manage application environments in the Mendix Cloud.
+    You can retrieve apps, start/stop environments, upload packages, manage settings, and more.
+
+    ## Authentication
+    All requests require two custom headers:
+    - `Mendix-Username`: Your Mendix account username/email
+    - `Mendix-ApiKey`: API key from your Mendix user profile
+
+    ## Environment Modes
+    Valid environment modes include: Test, Acceptance, Production, or custom flexible environment names.
+  contact:
+    name: Mendix Support
+    url: https://docs.mendix.com/apidocs-mxsdk/apidocs/deploy-api/
+  license:
+    name: Mendix Terms of Use
+
+servers:
+  - url: https://deploy.mendix.com/api/1
+    description: Production server
+
+security:
+  - MendixAuth: []
+
+tags:
+  - name: Apps
+    description: Application management
+  - name: Environments
+    description: Environment operations
+  - name: Packages
+    description: Package management
+  - name: Settings
+    description: Environment configuration
+  - name: Logs
+    description: Log retrieval
+  - name: Tags
+    description: Environment tagging
+
+paths:
+  /apps:
+    get:
+      tags:
+        - Apps
+      summary: Retrieve all apps
+      description: Retrieves all apps that the authenticated user has access to on Mendix Cloud
+      operationId: listApps
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/App'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+    post:
+      tags:
+        - Apps
+      summary: Create Free App environment
+      description: Creates a new Free App environment for the specified project
+      operationId: createFreeApp
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - ProjectId
+              properties:
+                ProjectId:
+                  type: string
+                  description: The project ID from the Mendix Developer Portal
+      responses:
+        '200':
+          description: App created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/App'
+        '400':
+          description: Invalid project ID or app already exists
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /apps/{AppId}:
+    get:
+      tags:
+        - Apps
+      summary: Retrieve specific app
+      description: Retrieves information about a specific app
+      operationId: getApp
+      parameters:
+        - $ref: '#/components/parameters/AppId'
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/App'
+        '400':
+          description: Invalid AppId
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          description: App not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /apps/{AppId}/environments:
+    get:
+      tags:
+        - Environments
+      summary: Retrieve all environments
+      description: Retrieves all environments for a specific app
+      operationId: listEnvironments
+      parameters:
+        - $ref: '#/components/parameters/AppId'
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Environment'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /apps/{AppId}/environments/{Mode}:
+    get:
+      tags:
+        - Environments
+      summary: Retrieve specific environment
+      description: Retrieves information about a specific environment
+      operationId: getEnvironment
+      parameters:
+        - $ref: '#/components/parameters/AppId'
+        - $ref: '#/components/parameters/Mode'
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Environment'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /apps/{AppId}/environments/{Mode}/start:
+    post:
+      tags:
+        - Environments
+      summary: Start environment
+      description: Starts a stopped environment. Returns a job ID to track the start progress.
+      operationId: startEnvironment
+      parameters:
+        - $ref: '#/components/parameters/AppId'
+        - $ref: '#/components/parameters/Mode'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - AutoSyncDb
+              properties:
+                AutoSyncDb:
+                  type: boolean
+                  description: Whether to automatically synchronize the database
+      responses:
+        '200':
+          description: Start job initiated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  JobId:
+                    type: string
+                    description: Job ID to track start progress
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /apps/{AppId}/environments/{Mode}/start/{JobId}:
+    get:
+      tags:
+        - Environments
+      summary: Get start environment status
+      description: Retrieves the status of an environment start operation
+      operationId: getStartStatus
+      parameters:
+        - $ref: '#/components/parameters/AppId'
+        - $ref: '#/components/parameters/Mode'
+        - name: JobId
+          in: path
+          required: true
+          schema:
+            type: string
+          description: The job ID returned from the start operation
+      responses:
+        '200':
+          description: Job status retrieved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  Status:
+                    type: string
+                    enum:
+                      - Starting
+                      - Started
+                    description: Current status of the start operation
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /apps/{AppId}/environments/{Mode}/stop:
+    post:
+      tags:
+        - Environments
+      summary: Stop environment
+      description: Stops a running environment
+      operationId: stopEnvironment
+      parameters:
+        - $ref: '#/components/parameters/AppId'
+        - $ref: '#/components/parameters/Mode'
+      responses:
+        '200':
+          description: Environment stopped successfully
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /apps/{AppId}/environments/{Mode}/package:
+    get:
+      tags:
+        - Packages
+      summary: Retrieve environment package
+      description: Retrieves information about the package deployed to an environment
+      operationId: getEnvironmentPackage
+      parameters:
+        - $ref: '#/components/parameters/AppId'
+        - $ref: '#/components/parameters/Mode'
+        - name: url
+          in: query
+          schema:
+            type: boolean
+            default: false
+          description: Include download URL in response
+      responses:
+        '200':
+          description: Package information retrieved
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Package'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /apps/{AppId}/packages/upload:
+    post:
+      tags:
+        - Packages
+      summary: Upload package
+      description: Uploads a deployment package (.mda file) to the app
+      operationId: uploadPackage
+      parameters:
+        - $ref: '#/components/parameters/AppId'
+        - name: name
+          in: query
+          schema:
+            type: string
+          description: Optional name for the package
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                file:
+                  type: string
+                  format: binary
+                  description: The .mda package file
+      responses:
+        '200':
+          description: Package uploaded successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Package'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /apps/{AppId}/environments/{Mode}/transport:
+    post:
+      tags:
+        - Packages
+      summary: Transport package
+      description: Transports a package to an environment. Not supported for Free Apps.
+      operationId: transportPackage
+      parameters:
+        - $ref: '#/components/parameters/AppId'
+        - $ref: '#/components/parameters/Mode'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - PackageId
+              properties:
+                PackageId:
+                  type: string
+                  description: The ID of the package to transport
+      responses:
+        '200':
+          description: Package transported successfully
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Operation not supported for Free Apps
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /apps/{AppId}/environments/{Mode}/clean:
+    post:
+      tags:
+        - Environments
+      summary: Clean environment
+      description: Cleans (resets) an environment. The environment must be stopped before cleaning.
+      operationId: cleanEnvironment
+      parameters:
+        - $ref: '#/components/parameters/AppId'
+        - $ref: '#/components/parameters/Mode'
+      responses:
+        '200':
+          description: Environment cleaned successfully
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Environment'
+        '400':
+          description: Environment must be stopped first
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /apps/{AppId}/environments/{Mode}/settings:
+    get:
+      tags:
+        - Settings
+      summary: Retrieve environment settings
+      description: Retrieves all settings for an environment including constants, custom settings, and scheduled events
+      operationId: getEnvironmentSettings
+      parameters:
+        - $ref: '#/components/parameters/AppId'
+        - $ref: '#/components/parameters/Mode'
+      responses:
+        '200':
+          description: Settings retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EnvironmentSettings'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+    post:
+      tags:
+        - Settings
+      summary: Set environment settings
+      description: Updates settings for an environment
+      operationId: setEnvironmentSettings
+      parameters:
+        - $ref: '#/components/parameters/AppId'
+        - $ref: '#/components/parameters/Mode'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EnvironmentSettings'
+      responses:
+        '200':
+          description: Settings updated successfully
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /apps/{AppId}/environments/{Mode}/scale:
+    post:
+      tags:
+        - Environments
+      summary: Scale environment
+      description: Scales an environment by adjusting the number of instances and memory per instance. Requires Mendix 7.0+ for horizontal scaling.
+      operationId: scaleEnvironment
+      parameters:
+        - $ref: '#/components/parameters/AppId'
+        - $ref: '#/components/parameters/Mode'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - Instances
+                - MemoryPerInstance
+              properties:
+                Instances:
+                  type: integer
+                  minimum: 1
+                  description: Number of instances to run
+                MemoryPerInstance:
+                  type: integer
+                  description: Memory per instance in MB
+      responses:
+        '200':
+          description: Environment scaled successfully
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /apps/{AppId}/environments/{Mode}/tags:
+    get:
+      tags:
+        - Tags
+      summary: Retrieve environment tags
+      description: Retrieves all tags for an environment
+      operationId: listEnvironmentTags
+      parameters:
+        - $ref: '#/components/parameters/AppId'
+        - $ref: '#/components/parameters/Mode'
+      responses:
+        '200':
+          description: Tags retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Tag'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+    post:
+      tags:
+        - Tags
+      summary: Create environment tag
+      description: Creates a new tag for an environment
+      operationId: createEnvironmentTag
+      parameters:
+        - $ref: '#/components/parameters/AppId'
+        - $ref: '#/components/parameters/Mode'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - Tag
+              properties:
+                Tag:
+                  type: string
+                  description: The tag value
+      responses:
+        '200':
+          description: Tag created successfully
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+    delete:
+      tags:
+        - Tags
+      summary: Delete environment tags
+      description: Deletes all tags for an environment
+      operationId: deleteEnvironmentTags
+      parameters:
+        - $ref: '#/components/parameters/AppId'
+        - $ref: '#/components/parameters/Mode'
+      responses:
+        '204':
+          description: Tags deleted successfully
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /apps/{AppId}/environments/{Mode}/logs/{Date}:
+    get:
+      tags:
+        - Logs
+      summary: Download application logs
+      description: Retrieves a download URL for application logs for a specific date
+      operationId: getApplicationLogs
+      parameters:
+        - $ref: '#/components/parameters/AppId'
+        - $ref: '#/components/parameters/Mode'
+        - name: Date
+          in: path
+          required: true
+          schema:
+            type: string
+            format: date
+            pattern: '^\d{4}-\d{2}-\d{2}$'
+          description: Date in YYYY-MM-DD format
+          example: '2023-12-31'
+      responses:
+        '200':
+          description: Log download URL retrieved
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LogDownload'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /apps/{AppId}/environments/{Mode}/access-logs/{Date}:
+    get:
+      tags:
+        - Logs
+      summary: Download access logs
+      description: Retrieves a download URL for access logs for a specific date
+      operationId: getAccessLogs
+      parameters:
+        - $ref: '#/components/parameters/AppId'
+        - $ref: '#/components/parameters/Mode'
+        - name: Date
+          in: path
+          required: true
+          schema:
+            type: string
+            format: date
+            pattern: '^\d{4}-\d{2}-\d{2}$'
+          description: Date in YYYY-MM-DD format
+          example: '2023-12-31'
+      responses:
+        '200':
+          description: Access log download URL retrieved
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LogDownload'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+components:
+  securitySchemes:
+    MendixAuth:
+      type: apiKey
+      in: header
+      name: Mendix-Username
+      description: |
+        Mendix API authentication requires two headers:
+        - Mendix-Username: Your Mendix username/email
+        - Mendix-ApiKey: Your API key from Mendix user profile
+
+        Note: OpenAPI 3.0 does not support multiple header-based auth,
+        so both headers must be provided with each request.
+
+  parameters:
+    AppId:
+      name: AppId
+      in: path
+      required: true
+      schema:
+        type: string
+      description: The unique identifier of the application
+
+    Mode:
+      name: Mode
+      in: path
+      required: true
+      schema:
+        type: string
+      description: The environment mode (Test, Acceptance, Production, or custom name)
+      example: Production
+
+  schemas:
+    App:
+      type: object
+      properties:
+        AppId:
+          type: string
+          description: Unique identifier for the app
+        Name:
+          type: string
+          description: Name of the application
+        ProjectId:
+          type: string
+          description: Project ID from Mendix Developer Portal
+        Url:
+          type: string
+          format: uri
+          description: URL to access the app
+
+    Environment:
+      type: object
+      properties:
+        Status:
+          type: string
+          description: Current status of the environment
+        EnvironmentId:
+          type: string
+          description: Unique identifier for the environment
+        Url:
+          type: string
+          format: uri
+          description: URL to access the environment
+        Mode:
+          type: string
+          description: Environment mode (Test, Acceptance, Production, etc.)
+        ModelVersion:
+          type: string
+          description: Version of the deployed model
+        MendixVersion:
+          type: string
+          description: Mendix runtime version
+        Production:
+          type: boolean
+          description: Whether this is a production environment
+
+    Package:
+      type: object
+      properties:
+        PackageId:
+          type: string
+          description: Unique identifier for the package
+        Name:
+          type: string
+          description: Name of the package
+        Version:
+          type: string
+          description: Package version
+        Status:
+          type: string
+          description: Status of the package
+        Size:
+          type: integer
+          description: Package size in bytes
+        Url:
+          type: string
+          format: uri
+          description: Download URL for the package (when requested)
+
+    EnvironmentSettings:
+      type: object
+      properties:
+        Constants:
+          type: array
+          description: Application constants
+          items:
+            type: object
+            properties:
+              Name:
+                type: string
+              Value:
+                type: string
+              DataType:
+                type: string
+        CustomSettings:
+          type: array
+          description: Custom runtime settings
+          items:
+            type: object
+            properties:
+              Name:
+                type: string
+              Value:
+                type: string
+        ScheduledEvents:
+          type: array
+          description: Scheduled event configurations
+          items:
+            type: object
+            properties:
+              Name:
+                type: string
+              Enabled:
+                type: boolean
+
+    Tag:
+      type: object
+      properties:
+        Tag:
+          type: string
+          description: The tag value
+
+    LogDownload:
+      type: object
+      properties:
+        Environment:
+          type: string
+          description: Environment name
+        Date:
+          type: string
+          format: date
+          description: Date of the logs
+        DownloadUrl:
+          type: string
+          format: uri
+          description: Temporary URL to download the log file
+
+    Error:
+      type: object
+      properties:
+        errorMessage:
+          type: string
+          description: Human-readable error message
+        errorCode:
+          type: string
+          description: Machine-readable error code
+          enum:
+            - INVALID_PROJECTID
+            - APPLICATION_ALREADY_EXISTS
+            - INVALID_APPID
+            - APP_NOT_FOUND
+
+  responses:
+    BadRequest:
+      description: Bad request - invalid parameters
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+
+    Unauthorized:
+      description: Unauthorized - invalid or missing authentication headers
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+
+    InternalError:
+      description: Internal server error
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
