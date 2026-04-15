@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "mendix-public-cloud": {
+      "command": "node",
+      "args": ["/absolute/path/to/mendix-public-cloud-mcp/dist/index.js"],
+      "env": {
+        "MENDIX_USERNAME": "your-email@example.com",
+        "MENDIX_API_KEY": "your-mendix-api-key-here"
+      }
+    }
+  }
+}

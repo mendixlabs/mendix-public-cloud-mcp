@@ -1,0 +1,33 @@
+{
+  "name": "mendix-public-cloud-mcp",
+  "version": "1.0.0",
+  "description": "MCP server for Mendix Public Cloud (Deploy, Build, and Backups APIs)",
+  "type": "module",
+  "main": "dist/index.js",
+  "bin": {
+    "mendix-public-cloud-mcp": "./dist/index.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "watch": "tsc --watch",
+    "dev": "node --watch dist/index.js",
+    "prepare": "npm run build"
+  },
+  "keywords": [
+    "mcp",
+    "mendix",
+    "cloud",
+    "deploy",
+    "build",
+    "backups"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.4"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "typescript": "^5.7.2"
+  }
+}
