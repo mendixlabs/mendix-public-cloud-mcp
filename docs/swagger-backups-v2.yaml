@@ -1,0 +1,737 @@
+openapi: 3.0.3
+info:
+  title: Mendix Backups API
+  version: 2.0.0
+  description: |
+    The Mendix Backups API v2 allows you to manage backups (snapshots) and restore
+    operations for applications deployed to the Mendix Cloud.
+
+    ## Features
+    - Create and manage environment snapshots
+    - Download backup archives (database-only or full backups)
+    - Restore environments from snapshots
+    - Monitor async operations with state tracking
+
+    ## Authentication
+    All requests require two custom headers:
+    - `Mendix-Username`: Your Mendix account username/email
+    - `Mendix-ApiKey`: API key from your Mendix user profile
+
+    ## Permissions
+    To use the Backups API, team members must have:
+    - **Access to Backups**: Enabled in the Permissions tab
+    - **API Rights**: Required for all API calls
+
+    ## Important Notes
+    - All timestamps use ISO 8601 format
+    - Archive download URLs expire after 8 hours
+    - Target environment must be stopped before restore operations
+    - Database-only restores may result in missing file data
+    - Snapshot uploads are only available via the Mendix Portal (not API)
+
+    ## Async Operations
+    Snapshot creation, archive generation, and restore operations are asynchronous.
+    States: `queued` → `running` → `completed` or `failed`
+  contact:
+    name: Mendix Support
+    url: https://docs.mendix.com/apidocs-mxsdk/apidocs/backups-api/
+  license:
+    name: Mendix Terms of Use
+
+servers:
+  - url: https://deploy.mendix.com/api/v2
+    description: Production server
+
+security:
+  - MendixAuth: []
+
+tags:
+  - name: Snapshots
+    description: Snapshot management operations
+  - name: Archives
+    description: Backup archive operations
+  - name: Restores
+    description: Restore operations
+
+paths:
+  /apps/{ProjectId}/environments/{EnvironmentId}/snapshots:
+    get:
+      tags:
+        - Snapshots
+      summary: List environment snapshots
+      description: |
+        Retrieves a paginated list of all snapshots for a specific environment.
+        Snapshots are backups of the environment at a specific point in time.
+      operationId: listSnapshots
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+        - $ref: '#/components/parameters/EnvironmentId'
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            format: int64
+            default: 0
+            minimum: 0
+          description: Number of items to skip for pagination
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            format: int64
+            default: 100
+            minimum: 1
+          description: Maximum number of items to return
+      responses:
+        '200':
+          description: Snapshots retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SnapshotList'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/EnvironmentNotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+    post:
+      tags:
+        - Snapshots
+      summary: Request snapshot creation
+      description: |
+        Initiates an asynchronous snapshot creation for the environment.
+        Returns immediately with a snapshot ID to track progress.
+
+        The snapshot captures the current state of both the database and files.
+      operationId: createSnapshot
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+        - $ref: '#/components/parameters/EnvironmentId'
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                comment:
+                  type: string
+                  description: Optional comment describing the snapshot
+                  example: Pre-deployment backup
+            examples:
+              with-comment:
+                value:
+                  comment: Backup before major release
+              without-comment:
+                value: {}
+      responses:
+        '200':
+          description: Snapshot creation initiated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Snapshot'
+        '400':
+          description: |
+            Bad request - invalid parameters, not supported, environment busy,
+            or invalid environment state
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                invalid-parameters:
+                  value:
+                    errorCode: INVALID_PARAMETERS
+                    errorMessage: Invalid request parameters
+                not-supported:
+                  value:
+                    errorCode: NOT_SUPPORTED
+                    errorMessage: Operation not supported for this environment
+                environment-busy:
+                  value:
+                    errorCode: ENVIRONMENT_BUSY
+                    errorMessage: Environment is busy with another operation
+                invalid-state:
+                  value:
+                    errorCode: INVALID_STATE
+                    errorMessage: Environment state does not allow snapshots
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/EnvironmentNotFound'
+        '500':
+          $ref: '#/components/responses/ServiceUnavailable'
+
+  /apps/{ProjectId}/environments/{EnvironmentId}/snapshots/{SnapshotId}:
+    get:
+      tags:
+        - Snapshots
+      summary: Get snapshot status
+      description: |
+        Retrieves the current status and details of a specific snapshot.
+        Use this to monitor the progress of snapshot creation.
+      operationId: getSnapshot
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+        - $ref: '#/components/parameters/EnvironmentId'
+        - $ref: '#/components/parameters/SnapshotId'
+      responses:
+        '200':
+          description: Snapshot details retrieved
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Snapshot'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          description: Snapshot not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+    put:
+      tags:
+        - Snapshots
+      summary: Update snapshot comment
+      description: |
+        Updates the comment field of an existing snapshot.
+        Note: The updated_at field remains unchanged after this operation.
+      operationId: updateSnapshotComment
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+        - $ref: '#/components/parameters/EnvironmentId'
+        - $ref: '#/components/parameters/SnapshotId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - comment
+              properties:
+                comment:
+                  type: string
+                  description: New comment for the snapshot
+                  example: Updated backup description
+      responses:
+        '200':
+          description: Comment updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Snapshot'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          description: Snapshot not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+    delete:
+      tags:
+        - Snapshots
+      summary: Delete snapshot
+      description: Deletes a specific snapshot permanently
+      operationId: deleteSnapshot
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+        - $ref: '#/components/parameters/EnvironmentId'
+        - $ref: '#/components/parameters/SnapshotId'
+      responses:
+        '204':
+          description: Snapshot deleted successfully
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          description: Snapshot not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /apps/{ProjectId}/environments/{EnvironmentId}/snapshots/{SnapshotId}/archives:
+    post:
+      tags:
+        - Archives
+      summary: Request archive creation
+      description: |
+        Initiates creation of a downloadable backup archive from a snapshot.
+        The archive can contain database-only or full backup (database + files).
+
+        Archives are zip files that can be downloaded once completed.
+        Download URLs are valid for 8 hours after completion.
+      operationId: createArchive
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+        - $ref: '#/components/parameters/EnvironmentId'
+        - $ref: '#/components/parameters/SnapshotId'
+        - name: data_type
+          in: query
+          schema:
+            type: string
+            enum:
+              - database_only
+              - files_and_database
+            default: files_and_database
+          description: Type of data to include in the archive
+      responses:
+        '200':
+          description: Archive creation initiated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Archive'
+        '400':
+          description: Invalid parameters or unsupported data type
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                unsupported-type:
+                  value:
+                    errorCode: UNSUPPORTED
+                    errorMessage: Unsupported data_type value
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          description: Snapshot not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /apps/{ProjectId}/environments/{EnvironmentId}/snapshots/{SnapshotId}/archives/{ArchiveId}:
+    get:
+      tags:
+        - Archives
+      summary: Get archive status
+      description: |
+        Retrieves the status of an archive creation operation.
+        When completed, the response includes a download URL valid for 8 hours.
+      operationId: getArchive
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+        - $ref: '#/components/parameters/EnvironmentId'
+        - $ref: '#/components/parameters/SnapshotId'
+        - name: ArchiveId
+          in: path
+          required: true
+          schema:
+            type: string
+          description: The unique identifier of the archive
+      responses:
+        '200':
+          description: Archive details retrieved
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Archive'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          description: Archive not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /apps/{ProjectId}/environments/{EnvironmentId}/restores:
+    post:
+      tags:
+        - Restores
+      summary: Request restore operation
+      description: |
+        Initiates an asynchronous restore operation from a snapshot.
+        The snapshot can be from the same environment or a different one.
+
+        **Important**: The target environment must be stopped before restoration.
+
+        **Database-only restores**: Restoring only the database may result in
+        missing files that the application expects.
+      operationId: createRestore
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+        - $ref: '#/components/parameters/EnvironmentId'
+        - name: source_snapshot_id
+          in: query
+          required: true
+          schema:
+            type: string
+          description: The snapshot ID to restore from (can be from another environment)
+        - name: db_only
+          in: query
+          schema:
+            type: boolean
+            default: false
+          description: If true, restore database only (files are not restored)
+      responses:
+        '200':
+          description: Restore operation initiated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Restore'
+        '400':
+          description: |
+            Invalid parameters, not supported, snapshot not found, invalid state,
+            operation not allowed, or environment busy
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                invalid-state:
+                  value:
+                    errorCode: INVALID_STATE
+                    errorMessage: Environment must be stopped before restore
+                environment-busy:
+                  value:
+                    errorCode: ENVIRONMENT_BUSY
+                    errorMessage: Environment is busy with another operation
+                not-found:
+                  value:
+                    errorCode: NOT_FOUND
+                    errorMessage: Source snapshot not found
+                not-allowed:
+                  value:
+                    errorCode: ERROR_NOT_ALLOWED
+                    errorMessage: Restore operation not allowed
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/EnvironmentNotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /apps/{ProjectId}/environments/{EnvironmentId}/restores/{RestoreId}:
+    get:
+      tags:
+        - Restores
+      summary: Get restore status
+      description: Retrieves the current status and details of a restore operation
+      operationId: getRestore
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+        - $ref: '#/components/parameters/EnvironmentId'
+        - name: RestoreId
+          in: path
+          required: true
+          schema:
+            type: string
+          description: The unique identifier of the restore operation
+      responses:
+        '200':
+          description: Restore details retrieved
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Restore'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          description: Restore operation not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+components:
+  securitySchemes:
+    MendixAuth:
+      type: apiKey
+      in: header
+      name: Mendix-Username
+      description: |
+        Mendix API authentication requires two headers:
+        - Mendix-Username: Your Mendix username/email
+        - Mendix-ApiKey: Your API key from user profile
+
+        Both headers must be included in every request.
+
+  parameters:
+    ProjectId:
+      name: ProjectId
+      in: path
+      required: true
+      schema:
+        type: string
+      description: The unique identifier of the project/app
+
+    EnvironmentId:
+      name: EnvironmentId
+      in: path
+      required: true
+      schema:
+        type: string
+      description: The unique identifier of the environment
+
+    SnapshotId:
+      name: SnapshotId
+      in: path
+      required: true
+      schema:
+        type: string
+      description: The unique identifier of the snapshot
+
+  schemas:
+    SnapshotList:
+      type: object
+      properties:
+        snapshots:
+          type: array
+          items:
+            $ref: '#/components/schemas/Snapshot'
+          description: Array of snapshot objects
+        total:
+          type: integer
+          format: int64
+          description: Total number of snapshots available
+        offset:
+          type: integer
+          format: int64
+          description: Number of items skipped
+        limit:
+          type: integer
+          format: int64
+          description: Maximum items returned
+
+    Snapshot:
+      type: object
+      properties:
+        snapshot_id:
+          type: string
+          description: Unique identifier for the snapshot
+          example: abc123-snapshot-id
+        state:
+          type: string
+          enum:
+            - queued
+            - running
+            - completed
+            - failed
+          description: Current state of the snapshot operation
+        status_message:
+          type: string
+          description: Human-readable status message
+          example: Snapshot creation in progress
+        created_at:
+          type: string
+          format: date-time
+          description: ISO 8601 timestamp when snapshot was created
+          example: '2023-12-31T23:59:59Z'
+        finished_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: ISO 8601 timestamp when operation completed
+          example: '2024-01-01T00:15:30Z'
+        updated_at:
+          type: string
+          format: date-time
+          description: ISO 8601 timestamp of last update
+          example: '2024-01-01T00:10:00Z'
+        model_version:
+          type: string
+          description: Application version running when snapshot was created
+          example: 2.3.5
+        expires_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: ISO 8601 timestamp when snapshot expires
+          example: '2024-02-01T00:00:00Z'
+        comment:
+          type: string
+          description: User-provided description of the snapshot
+          example: Pre-production deployment backup
+
+    Archive:
+      type: object
+      properties:
+        archive_id:
+          type: string
+          description: Unique identifier for the archive
+          example: xyz789-archive-id
+        state:
+          type: string
+          enum:
+            - queued
+            - running
+            - completed
+            - failed
+          description: Current state of the archive creation
+        status_message:
+          type: string
+          description: Human-readable status message
+          example: Archive creation completed
+        data_type:
+          type: string
+          enum:
+            - database_only
+            - files_and_database
+          description: Type of data included in the archive
+        snapshot_id:
+          type: string
+          description: Source snapshot identifier
+        url:
+          type: string
+          format: uri
+          nullable: true
+          description: |
+            Download URL for the archive (available when state is completed).
+            Valid for 8 hours after completion.
+          example: https://example.com/download/archive.zip?token=abc123
+        created_at:
+          type: string
+          format: date-time
+          description: ISO 8601 timestamp when archive creation started
+        finished_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: ISO 8601 timestamp when archive creation completed
+        updated_at:
+          type: string
+          format: date-time
+          description: ISO 8601 timestamp of last update
+
+    Restore:
+      type: object
+      properties:
+        restore_id:
+          type: string
+          description: Unique identifier for the restore operation
+          example: restore-123-id
+        state:
+          type: string
+          enum:
+            - queued
+            - running
+            - completed
+            - failed
+          description: Current state of the restore operation
+        status_message:
+          type: string
+          description: Human-readable status message
+          example: Restore in progress
+        source_snapshot_id:
+          type: string
+          description: Snapshot being restored from
+        source_environment_id:
+          type: string
+          description: Environment ID where the snapshot originated
+        target_environment_id:
+          type: string
+          description: Environment ID being restored to
+        created_at:
+          type: string
+          format: date-time
+          description: ISO 8601 timestamp when restore started
+        finished_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: ISO 8601 timestamp when restore completed
+        updated_at:
+          type: string
+          format: date-time
+          description: ISO 8601 timestamp of last update
+
+    Error:
+      type: object
+      properties:
+        errorCode:
+          type: string
+          description: Machine-readable error code
+          enum:
+            - INVALID_PARAMETERS
+            - NOT_SUPPORTED
+            - ENVIRONMENT_BUSY
+            - INVALID_STATE
+            - NO_ACCESS
+            - ENVIRONMENT_NOT_FOUND
+            - SNAPSHOT_LISTING_FAILED
+            - SERVICE_UNAVAILABLE
+            - NOT_FOUND
+            - ERROR_NOT_ALLOWED
+            - UNSUPPORTED
+        errorMessage:
+          type: string
+          description: Human-readable error message
+
+  responses:
+    BadRequest:
+      description: Bad request - invalid parameters or not supported
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+
+    Forbidden:
+      description: Forbidden - insufficient permissions (NO_ACCESS)
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            errorCode: NO_ACCESS
+            errorMessage: User does not have access to this resource
+
+    EnvironmentNotFound:
+      description: Environment not found
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            errorCode: ENVIRONMENT_NOT_FOUND
+            errorMessage: Environment not found
+
+    ServiceUnavailable:
+      description: Service unavailable
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            errorCode: SERVICE_UNAVAILABLE
+            errorMessage: Service temporarily unavailable
+
+    InternalError:
+      description: Internal server error
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
