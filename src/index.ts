@@ -243,6 +243,29 @@ const tools: Tool[] = [
   },
 
   // ============================================================================
+  // DEPLOY API v2 - Package Upload & Jobs
+  // ============================================================================
+  {
+    name: "mendix_get_job_status",
+    description:
+      "Gets the status of an asynchronous job (e.g., package upload) (Deploy API v2)",
+    inputSchema: {
+      type: "object",
+      properties: {
+        appId: {
+          type: "string",
+          description: "The subdomain name of the application",
+        },
+        jobId: {
+          type: "string",
+          description: "The job ID returned from a previous operation",
+        },
+      },
+      required: ["appId", "jobId"],
+    },
+  },
+
+  // ============================================================================
   // BUILD API v1 - Package Management
   // ============================================================================
   {
@@ -754,6 +777,20 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         const result = await mendixApiRequest(
           DEPLOY_API_V1,
           `/apps/${appId}/environments/${mode}`
+        );
+        return {
+          content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+        };
+      }
+
+      // ========================================================================
+      // DEPLOY API v2 - Package Upload & Jobs
+      // ========================================================================
+      case "mendix_get_job_status": {
+        const { appId, jobId } = args as { appId: string; jobId: string };
+        const result = await mendixApiRequest(
+          DEPLOY_API_V2,
+          `/apps/${appId}/jobs/${jobId}`
         );
         return {
           content: [{ type: "text", text: JSON.stringify(result, null, 2) }],

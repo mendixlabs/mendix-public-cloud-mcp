@@ -4,12 +4,13 @@ A comprehensive Model Context Protocol (MCP) server that provides tools for inte
 
 ## Features
 
-This MCP server provides **23 tools** covering:
+This MCP server provides **24 tools** covering:
 
-### Deploy API (v1 & v4)
+### Deploy API (v1, v2 & v4)
 - **Apps Management**: List apps, get app details
 - **Environments**: List/get environments, start/stop operations, get settings
 - **Package Transport**: Deploy packages to environments
+- **Job Tracking**: Monitor asynchronous operations
 - **Logs**: Download application logs
 
 ### Build API (v1)
@@ -105,6 +106,9 @@ node dist/index.js
 #### Package Transport
 - `mendix_transport_package` - Deploy a package to an environment
 
+#### Job Tracking
+- `mendix_get_job_status` - Get status of asynchronous jobs (Deploy API v2)
+
 #### Logs
 - `mendix_get_app_logs` - Get download URL for application logs
 
@@ -166,6 +170,7 @@ Get the application logs for Production environment on 2024-01-15
 ## API Versions Used
 
 - **Deploy API v4**: Modern API for apps and environments (https://cloud.home.mendix.com/api/v4)
+- **Deploy API v2**: Job status tracking (https://deploy.mendix.com/api/v2)
 - **Deploy API v1**: Legacy API for environment operations (https://deploy.mendix.com/api/1)
 - **Build API v1**: Package management (https://deploy.mendix.com/api/1)
 - **Backups API v2**: Snapshot and restore operations (https://deploy.mendix.com/api/v2)

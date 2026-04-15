@@ -1,6 +1,6 @@
 # Mendix Public Cloud MCP Tools Reference
 
-Complete reference for all 23 tools available in the Mendix Public Cloud MCP server.
+Complete reference for all 24 tools available in the Mendix Public Cloud MCP server.
 
 ## Deploy API v4 Tools
 
@@ -181,6 +181,31 @@ Retrieves environment settings (constants, custom settings, scheduled events).
   "mode": "Production"
 }
 ```
+
+---
+
+## Deploy API v2 Tools
+
+### mendix_get_job_status
+Gets the status of an asynchronous job (e.g., package upload).
+
+**Parameters:**
+- `appId` (string, required) - Subdomain name of the application
+- `jobId` (string, required) - Job ID returned from a previous operation
+
+**Example:**
+```json
+{
+  "appId": "myapp",
+  "jobId": "66046953-ecf7-4550-a889-4b7e9f1e1705"
+}
+```
+
+**Response States:**
+- `Queued` - Job is waiting to be processed
+- `Running` - Job is currently being processed
+- `Completed` - Job finished successfully
+- `Failed` - Job encountered an error
 
 ---
 
