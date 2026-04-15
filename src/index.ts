@@ -16,11 +16,13 @@ const DEPLOY_API_V4 = "https://cloud.home.mendix.com/api/v4";
 interface MendixConfig {
   username?: string;
   apiKey?: string;
+  mxToken?: string; // Personal Access Token for Deploy API v4
 }
 
 const config: MendixConfig = {
   username: process.env.MENDIX_USERNAME,
   apiKey: process.env.MENDIX_API_KEY,
+  mxToken: process.env.MENDIX_MX_TOKEN,
 };
 
 /**
@@ -33,10 +35,19 @@ async function mendixApiRequest(
   body?: unknown,
   queryParams?: Record<string, string | number | boolean>
 ): Promise<unknown> {
-  if (!config.username || !config.apiKey) {
-    throw new Error(
-      "MENDIX_USERNAME and MENDIX_API_KEY environment variables are required"
-    );
+  // Check if this is a Deploy API v4 call and if we have an MxToken
+  const isDeployApiV4 = baseUrl === DEPLOY_API_V4;
+  const useMxToken = isDeployApiV4 && !!config.mxToken;
+
+  // Validate credentials based on authentication method
+  if (useMxToken) {
+    // mxToken already set in config, nothing to validate
+  } else {
+    if (!config.username || !config.apiKey) {
+      throw new Error(
+        "MENDIX_USERNAME and MENDIX_API_KEY environment variables are required"
+      );
+    }
   }
 
   let url = `${baseUrl}${endpoint}`;
@@ -51,10 +62,18 @@ async function mendixApiRequest(
   }
 
   const headers: Record<string, string> = {
-    "Mendix-Username": config.username,
-    "Mendix-ApiKey": config.apiKey,
     "Content-Type": "application/json",
   };
+
+  // Use different authentication based on method
+  if (useMxToken) {
+    // Deploy API v4 with Personal Access Token
+    headers["Authorization"] = `MxToken ${config.mxToken}`;
+  } else {
+    // API Key authentication for v1/v2 and other APIs
+    headers["Mendix-Username"] = config.username!;
+    headers["Mendix-ApiKey"] = config.apiKey!;
+  }
 
   const options: RequestInit = {
     method,

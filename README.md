@@ -51,9 +51,20 @@ npm run build
 
 ### Setting up the MCP Server
 
-The server requires two environment variables:
+#### Authentication Configuration
+
+**Option 1: API Key (Works with all APIs)**
+
+Set these environment variables:
 - `MENDIX_USERNAME`: Your Mendix account username/email
 - `MENDIX_API_KEY`: Your Mendix API key
+
+**Option 2: Personal Access Token (Deploy API v4 only)**
+
+Set this environment variable:
+- `MENDIX_MX_TOKEN`: Your Personal Access Token
+
+**Note:** You can use both authentication methods simultaneously. The server will use PAT for Deploy API v4 calls when `MENDIX_MX_TOKEN` is set, and API Key for all other APIs.
 
 #### For Claude Desktop
 
@@ -77,13 +88,39 @@ Add to your Claude Desktop configuration file:
 }
 ```
 
-#### For Other MCP Clients
+Using Personal Access Token (PAT) for Deploy API v4:
+```json
+{
+  "mcpServers": {
+    "mendix-public-cloud": {
+      "command": "node",
+      "args": ["/absolute/path/to/mendix-public-cloud-mcp/dist/index.js"],
+      "env": {
+        "MENDIX_USERNAME": "your-email@example.com",
+        "MENDIX_API_KEY": "your-api-key-here",
+        "MENDIX_MX_TOKEN": "your-personal-access-token-here"
+      }
+    }
+  }
+}
+```
+
+#### For Other MCP Clients (stdio)
 
 Export the environment variables:
 
+**Using API Key:**
 ```bash
 export MENDIX_USERNAME="your-email@example.com"
 export MENDIX_API_KEY="your-api-key-here"
+node dist/index.js
+```
+
+**Using Personal Access Token for Deploy API v4:**
+```bash
+export MENDIX_USERNAME="your-email@example.com"
+export MENDIX_API_KEY="your-api-key-here"
+export MENDIX_MX_TOKEN="your-personal-access-token-here"
 node dist/index.js
 ```
 
