@@ -1,0 +1,281 @@
+openapi: 3.0.3
+info:
+  title: Mendix Deploy API
+  version: 2.0.0
+  description: |
+    The Mendix Deploy API v2 provides package upload and job status tracking capabilities for Mendix Cloud applications.
+
+    This version focuses on deployment package management with asynchronous job tracking.
+    For additional deployment operations, please use Deploy API v1 or v4.
+
+    ## Authentication
+    All requests require two custom headers:
+    - `Mendix-Username`: Your Mendix account username/email
+    - `Mendix-ApiKey`: API key from your Mendix user profile
+
+    ## Permissions
+    To use the Deploy API, team members must have:
+    - **API Rights**: Enabled in the Permissions tab of your app's Environments page
+    - **Transport Rights**: Required for transporting packages to environments
+
+    ## Important Notes
+    - Two-factor authentication is not required for API operations
+    - Maximum package upload size: 1 GB for Mendix Cloud apps
+    - Mendix recommends using calls from the same API version where possible
+  contact:
+    name: Mendix Support
+    url: https://docs.mendix.com/apidocs-mxsdk/apidocs/deploy-api-2/
+  license:
+    name: Mendix Terms of Use
+
+servers:
+  - url: https://deploy.mendix.com/api/v2
+    description: Production server
+
+security:
+  - MendixAuth: []
+
+tags:
+  - name: Packages
+    description: Package upload operations
+  - name: Jobs
+    description: Asynchronous job status tracking
+
+paths:
+  /apps/{AppId}/packages/upload:
+    post:
+      tags:
+        - Packages
+      summary: Upload deployment package
+      description: |
+        Uploads a deployment package (.mda file) from the local system to a specific app.
+        Returns a PackageId and JobId for tracking the upload status.
+
+        The package file must be sent as multipart/form-data according to RFC 7578.
+        Maximum file size is 1 GB for Mendix Cloud applications.
+      operationId: uploadPackage
+      parameters:
+        - $ref: '#/components/parameters/AppId'
+        - name: name
+          in: query
+          required: false
+          schema:
+            type: string
+            default: default.mda
+          description: Optional name for the package. Defaults to "default.mda" if not provided.
+          example: calc_1.0.0.45.mda
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required:
+                - file
+              properties:
+                file:
+                  type: string
+                  format: binary
+                  description: The deployment package file (.mda)
+            encoding:
+              file:
+                contentType: application/octet-stream
+      responses:
+        '200':
+          description: Package upload initiated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UploadResponse'
+              example:
+                PackageId: "b3d14e53-2654-4534-b374-9179a69ef3cf"
+                JobId: "66046953-ecf7-4550-a889-4b7e9f1e1705"
+        '400':
+          description: Bad request - invalid parameters or file
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Unauthorized - invalid or missing authentication headers
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Forbidden - insufficient permissions (API Rights or Transport Rights not granted)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: App not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '413':
+          description: Payload too large - exceeds 1 GB limit
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /apps/{AppId}/jobs/{JobId}:
+    get:
+      tags:
+        - Jobs
+      summary: Get job status
+      description: |
+        Retrieves the status of an asynchronous job using the JobId returned from a previous API call.
+
+        Use this endpoint to track the progress of package uploads or other asynchronous operations.
+      operationId: getJobStatus
+      parameters:
+        - $ref: '#/components/parameters/AppId'
+        - name: JobId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: The job ID returned from a previous API call (e.g., package upload)
+          example: 66046953-ecf7-4550-a889-4b7e9f1e1705
+      responses:
+        '200':
+          description: Job status retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JobStatus'
+              examples:
+                queued:
+                  summary: Job is queued
+                  value:
+                    Status: Queued
+                running:
+                  summary: Job is running
+                  value:
+                    Status: Running
+                completed:
+                  summary: Job completed successfully
+                  value:
+                    Status: Completed
+                failed:
+                  summary: Job failed
+                  value:
+                    Status: Failed
+        '400':
+          description: Bad request - invalid AppId or JobId
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Unauthorized - invalid or missing authentication headers
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Forbidden - insufficient permissions
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Job or app not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+components:
+  securitySchemes:
+    MendixAuth:
+      type: apiKey
+      in: header
+      name: Mendix-Username
+      description: |
+        Mendix API authentication requires two headers:
+        - Mendix-Username: Your Mendix username/email
+        - Mendix-ApiKey: Your API key from Mendix user profile
+
+        Note: OpenAPI 3.0 does not support multiple header-based auth,
+        so both headers must be provided with each request.
+
+        API access must be explicitly enabled for team members via the
+        Permissions tab in your app's Environments page.
+
+  parameters:
+    AppId:
+      name: AppId
+      in: path
+      required: true
+      schema:
+        type: string
+      description: The subdomain name of the application (not a UUID in v2)
+      example: calc
+
+  schemas:
+    UploadResponse:
+      type: object
+      required:
+        - PackageId
+        - JobId
+      properties:
+        PackageId:
+          type: string
+          format: uuid
+          description: Unique identifier for the uploaded package
+          example: b3d14e53-2654-4534-b374-9179a69ef3cf
+        JobId:
+          type: string
+          format: uuid
+          description: Unique identifier for the upload job (use this to track status)
+          example: 66046953-ecf7-4550-a889-4b7e9f1e1705
+
+    JobStatus:
+      type: object
+      required:
+        - Status
+      properties:
+        Status:
+          type: string
+          enum:
+            - Queued
+            - Running
+            - Completed
+            - Failed
+          description: |
+            Current status of the job:
+            - Queued: Job is waiting to be processed
+            - Running: Job is currently being processed
+            - Completed: Job finished successfully
+            - Failed: Job encountered an error and failed
+
+    Error:
+      type: object
+      properties:
+        errorMessage:
+          type: string
+          description: Human-readable error message
+        errorCode:
+          type: string
+          description: Machine-readable error code
+        details:
+          type: object
+          description: Additional error details
+          additionalProperties: true
