@@ -1,0 +1,505 @@
+openapi: 3.0.3
+info:
+  title: Mendix Build API
+  version: 1.0.0
+  description: |
+    The Mendix Build API allows you to manage deployment packages for applications
+    deployed to the Mendix Cloud. You can create new builds from source control,
+    retrieve package information, and manage deployment packages.
+
+    ## Authentication
+    All requests require two custom headers:
+    - `Mendix-Username`: Your Mendix account username/email
+    - `Mendix-ApiKey`: API key from your Mendix user profile
+
+    ## Permissions
+    To use the Build API, team members must have:
+    - **API Rights**: Enabled in the Permissions tab of your app's Environments page
+
+    ## Supported Version Control Systems
+    - **SVN**: Use "trunk" or "branches/branch-name" for Branch parameter
+    - **Git**: Use "main" or "branches/branch-name" for Branch parameter
+
+    ## Important Notes
+    - This API exclusively supports apps deployed to Mendix Cloud
+    - For Git repositories, use full commit hashes instead of short hashes for large repos
+    - Package versions must follow semantic versioning (e.g., "2.3.5")
+  contact:
+    name: Mendix Support
+    url: https://docs.mendix.com/apidocs-mxsdk/apidocs/build-api/
+  license:
+    name: Mendix Terms of Use
+
+servers:
+  - url: https://deploy.mendix.com/api/1
+    description: Production server
+
+security:
+  - MendixAuth: []
+
+tags:
+  - name: Packages
+    description: Deployment package management
+
+paths:
+  /apps/{AppId}/packages:
+    get:
+      tags:
+        - Packages
+      summary: Retrieve all packages
+      description: Retrieves all deployment packages for a specific application
+      operationId: listPackages
+      parameters:
+        - $ref: '#/components/parameters/AppId'
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Package'
+        '400':
+          description: Invalid AppId
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                errorCode: INVALID_APPID
+                errorMessage: Invalid application identifier
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+    post:
+      tags:
+        - Packages
+      summary: Start building deployment package
+      description: |
+        Initiates a new build process for creating a deployment package from source control.
+        The build runs asynchronously and returns a PackageId to track progress.
+
+        **Version Control Systems:**
+        - SVN: Use "trunk" or "branches/branch-name" for Branch; integer for Revision
+        - Git: Use "main" or "branches/branch-name" for Branch; commit hash for Revision
+
+        **Version Format:** Must follow semantic versioning (e.g., "2.3.5")
+      operationId: startBuild
+      parameters:
+        - $ref: '#/components/parameters/AppId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - Version
+              properties:
+                Branch:
+                  type: string
+                  description: |
+                    Branch to build from:
+                    - SVN: "trunk" or "branches/branch-name"
+                    - Git: "main" or "branches/branch-name"
+                  example: main
+                Revision:
+                  type: string
+                  description: |
+                    Specific revision to build:
+                    - SVN: Integer revision number
+                    - Git: Full commit hash (recommended) or short hash
+                  example: 1a2b3c4d5e6f7g8h9i0j1k2l3m4n5o6p7q8r9s0t
+                Version:
+                  type: string
+                  description: Semantic version for the package (required)
+                  pattern: '^\d+\.\d+\.\d+$'
+                  example: 2.3.5
+                Description:
+                  type: string
+                  description: Optional description for the package
+                  example: Release build for production deployment
+            examples:
+              git-main:
+                summary: Build from Git main branch
+                value:
+                  Branch: main
+                  Revision: 1a2b3c4d5e6f7g8h9i0j1k2l3m4n5o6p7q8r9s0t
+                  Version: 2.3.5
+                  Description: Production release
+              svn-trunk:
+                summary: Build from SVN trunk
+                value:
+                  Branch: trunk
+                  Revision: "12345"
+                  Version: 1.0.0
+                  Description: Initial release
+              git-branch:
+                summary: Build from Git feature branch
+                value:
+                  Branch: branches/feature-x
+                  Revision: a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6q7r8s9t0
+                  Version: 2.4.0-beta
+                  Description: Beta release from feature branch
+      responses:
+        '200':
+          description: Build started successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  PackageId:
+                    type: string
+                    description: Unique identifier for the build package
+                    example: b3d14e53-2654-4534-b374-9179a69ef3cf
+        '400':
+          description: Bad request - invalid parameters or version format
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                invalid-appid:
+                  value:
+                    errorCode: INVALID_APPID
+                    errorMessage: Invalid application identifier
+                invalid-parameters:
+                  value:
+                    errorCode: INVALID_PARAMETERS
+                    errorMessage: Missing or invalid parameters
+                invalid-version:
+                  value:
+                    errorCode: INVALID_VERSION
+                    errorMessage: Version must follow semantic versioning format
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          description: App not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                errorCode: APP_NOT_FOUND
+                errorMessage: Application not found
+        '500':
+          description: Build failed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                errorCode: BUILD_FAILED
+                errorMessage: Build process failed
+
+  /apps/{AppId}/packages/{PackageId}:
+    get:
+      tags:
+        - Packages
+      summary: Retrieve specific package
+      description: |
+        Retrieves detailed information about a specific deployment package.
+        Optionally includes a temporary download URL by setting url=true.
+      operationId: getPackage
+      parameters:
+        - $ref: '#/components/parameters/AppId'
+        - name: PackageId
+          in: path
+          required: true
+          schema:
+            type: string
+          description: The unique identifier of the package
+          example: b3d14e53-2654-4534-b374-9179a69ef3cf
+        - name: url
+          in: query
+          schema:
+            type: boolean
+            default: false
+          description: Include temporary download URL in response
+      responses:
+        '200':
+          description: Package information retrieved
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Package'
+                  - type: object
+                    properties:
+                      Url:
+                        type: object
+                        description: Download URL information (only when url=true)
+                        properties:
+                          Location:
+                            type: string
+                            format: uri
+                            description: Temporary download URL for the package
+                          TTL:
+                            type: integer
+                            format: int64
+                            description: Time-to-live for the URL in seconds
+              examples:
+                without-url:
+                  summary: Package info without download URL
+                  value:
+                    PackageId: b3d14e53-2654-4534-b374-9179a69ef3cf
+                    Name: myapp-2.3.5.mda
+                    Description: Production release
+                    Version: 2.3.5
+                    Creator: jane.doe@example.com
+                    CreationDate: 1609459200000
+                    Status: Succeeded
+                    Size: 52428800
+                with-url:
+                  summary: Package info with download URL
+                  value:
+                    PackageId: b3d14e53-2654-4534-b374-9179a69ef3cf
+                    Name: myapp-2.3.5.mda
+                    Description: Production release
+                    Version: 2.3.5
+                    Creator: jane.doe@example.com
+                    CreationDate: 1609459200000
+                    Status: Succeeded
+                    Size: 52428800
+                    Url:
+                      Location: https://example.com/download/package.mda?token=xyz
+                      TTL: 3600
+        '400':
+          description: Invalid parameters
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                errorCode: INVALID_PARAMETERS
+                errorMessage: Invalid AppId or PackageId
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          description: Package not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                errorCode: PACKAGE_NOT_FOUND
+                errorMessage: Package not found
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+    delete:
+      tags:
+        - Packages
+      summary: Delete package
+      description: |
+        Deletes a deployment package. Cannot delete packages that are currently
+        in use (deployed to an environment).
+      operationId: deletePackage
+      parameters:
+        - $ref: '#/components/parameters/AppId'
+        - name: PackageId
+          in: path
+          required: true
+          schema:
+            type: string
+          description: The unique identifier of the package to delete
+          example: b3d14e53-2654-4534-b374-9179a69ef3cf
+      responses:
+        '200':
+          description: Package deleted successfully
+        '400':
+          description: Invalid parameters
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                errorCode: INVALID_PARAMETERS
+                errorMessage: Invalid AppId or PackageId
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          description: Package not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                errorCode: PACKAGE_NOT_FOUND
+                errorMessage: Package not found
+        '409':
+          description: Package is in use
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                errorCode: PACKAGE_IN_USE
+                errorMessage: Cannot delete package that is deployed to an environment
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /apps/{AppId}/packages/{PackageId}/download:
+    get:
+      tags:
+        - Packages
+      summary: Download package (deprecated)
+      description: |
+        **DEPRECATED**: Use GET /apps/{AppId}/packages/{PackageId}?url=true instead.
+
+        This endpoint directly downloads the package file but is deprecated in favor
+        of the newer approach that provides a temporary download URL.
+      operationId: downloadPackage
+      deprecated: true
+      parameters:
+        - $ref: '#/components/parameters/AppId'
+        - name: PackageId
+          in: path
+          required: true
+          schema:
+            type: string
+          description: The unique identifier of the package
+          example: b3d14e53-2654-4534-b374-9179a69ef3cf
+      responses:
+        '200':
+          description: Package file download
+          content:
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary
+        '400':
+          description: Invalid parameters
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                errorCode: INVALID_PARAMETERS
+                errorMessage: Invalid AppId or PackageId
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          description: Package not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                errorCode: PACKAGE_NOT_FOUND
+                errorMessage: Package not found
+        '500':
+          description: Build not succeeded or internal error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                errorCode: BUILD_NOT_SUCCEEDED
+                errorMessage: Package build has not completed successfully
+
+components:
+  securitySchemes:
+    MendixAuth:
+      type: apiKey
+      in: header
+      name: Mendix-Username
+      description: |
+        Mendix API authentication requires two headers:
+        - Mendix-Username: Your Mendix username/email
+        - Mendix-ApiKey: Your API key from Mendix user profile
+
+        Note: OpenAPI 3.0 does not support multiple header-based auth,
+        so both headers must be provided with each request.
+
+  parameters:
+    AppId:
+      name: AppId
+      in: path
+      required: true
+      schema:
+        type: string
+      description: The subdomain name of the application (not a UUID)
+      example: myapp
+
+  schemas:
+    Package:
+      type: object
+      properties:
+        PackageId:
+          type: string
+          description: Unique identifier for the package
+          example: b3d14e53-2654-4534-b374-9179a69ef3cf
+        Name:
+          type: string
+          description: Name of the package file
+          example: myapp-2.3.5.mda
+        Description:
+          type: string
+          description: Package description
+          example: Production release
+        Version:
+          type: string
+          description: Semantic version of the package
+          example: 2.3.5
+        Creator:
+          type: string
+          description: Email address of the user who created the package
+          example: jane.doe@example.com
+        CreationDate:
+          type: integer
+          format: int64
+          description: Creation timestamp in milliseconds since epoch
+          example: 1609459200000
+        Status:
+          type: string
+          enum:
+            - Succeeded
+            - Queued
+            - Building
+            - Uploading
+            - Failed
+          description: Current status of the package build
+        Size:
+          type: integer
+          format: int64
+          description: Package size in bytes
+          example: 52428800
+
+    Error:
+      type: object
+      properties:
+        errorCode:
+          type: string
+          description: Machine-readable error code
+          enum:
+            - INVALID_APPID
+            - INVALID_PARAMETERS
+            - INVALID_VERSION
+            - APP_NOT_FOUND
+            - PACKAGE_NOT_FOUND
+            - PACKAGE_IN_USE
+            - BUILD_FAILED
+            - BUILD_NOT_SUCCEEDED
+        errorMessage:
+          type: string
+          description: Human-readable error message
+
+  responses:
+    Unauthorized:
+      description: Unauthorized - invalid or missing authentication headers
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+
+    InternalError:
+      description: Internal server error
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
