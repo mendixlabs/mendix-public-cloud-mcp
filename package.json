@@ -1,6 +1,6 @@
 {
   "name": "mendix-public-cloud-mcp",
-  "version": "1.0.0",
+  "version": "0.0.1",
   "description": "MCP server for Mendix Public Cloud (Deploy, Build, and Backups APIs)",
   "type": "module",
   "main": "dist/index.js",
