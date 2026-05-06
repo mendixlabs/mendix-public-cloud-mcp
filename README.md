@@ -2,6 +2,13 @@
 
 A comprehensive Model Context Protocol (MCP) server that provides tools for interacting with the Mendix Public Cloud APIs: Deploy API, Build API, and Backups API.
 
+> [!WARNING]
+> The use of AI tools is non-deterministic — outputs may vary between runs. AI
+> Assistants/Agents will have permissions based on what the API Key and PAT
+> (Personal Access Token) have access to. Via the Backups API and Logs it may
+> have access to Production environments and PII data of your environments.
+> Review and scope credentials carefully before use.
+
 ## Features
 
 This MCP server provides **24 tools** covering:
